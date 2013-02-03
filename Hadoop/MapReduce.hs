@@ -10,7 +10,7 @@
 -- Happy MapReducing!
 
 
-module Hadoop.MapReduce (Mapper, Reducer) where
+module Hadoop.MapReduce (mrMain, Mapper, Reducer) where
 
 import System (getArgs)
 import Data.List (groupBy)
@@ -39,67 +39,61 @@ usage_message =
     "    -m     Run the Mapper portion of the MapReduce job\n" ++
     "    -r     Run the Reducer portion of the MapReduce job\n"
 
--- Convert key value pairs from the output of a Mapper to String values that are
--- expected output by the Hadoop streaming system.
-convertMapOutput :: (Show k, Show v) => [(k, v)] -> [String]
-convertMapOutput = map toKeyValue
+-- Convert key value pairs from the output of a Mapper or a Reducer
+-- to String values that are expected output by the Hadoop streaming system.
+convertOutput :: (Show k, Show v) => [(k, v)] -> [String]
+convertOutput = map toKeyValue
     where toKeyValue kv = (show $ fst kv) ++ [separator] ++ (show $ snd kv)
 
 -- Given a map function, `mapper` returns a function that
 -- can be passed to haskell's `interact` function.
 mapInteractor :: (Show k, Show v) => Mapper k v -> Interactor
 mapInteractor mapper =
-    unlines . (concatMap (convertMapOutput . mapper)) . lines
+    unlines . (concatMap (convertOutput . mapper)) . lines
 
 
--- Convert a line of input from a Hadoop streaming process to the key and value
--- that are expected as input to a Reducer
-convertReduceInput :: String -> (String, String)
-convertReduceInput s =
-    (takeWhile (/= separator) s, tail $ dropWhile (/= separator) s)
-
-{-
-reduceInteractor ::
-    (Read ki, Read vi, Show ko, Show vo) => Reducer ki vi ko vo -> Interactor
-reduceInteractor reducer input =
- -}
-
-
-
-
-{-
 -- For the reduce step, each line consists of a key and
 -- (optionally) a value. The function `key` extracts
 -- the key from a line.
-key :: String -> String
-key = takeWhile (/= separator)
+key :: (Read k) => String -> k
+key = read . takeWhile (/= separator)
 
 -- Like `key`, `value` extracts the value from a line.
-value :: String -> String
-value = (drop 1) . dropWhile (/= separator)
+value :: (Read v) => String -> v
+value = read . (drop 1) . dropWhile (/= separator)
 
--- Given two lines, `compareKeys` returns True if the lines
--- have the same key.
-compareKeys :: String -> String -> Bool
-compareKeys a b = (key a) == (key b)
+-- Convert a line of input from a Hadoop streaming process to the key and value
+-- that are expected as input to a Reducer
+convertReduceInput :: (Read k, Read v) => String -> (k, v)
+convertReduceInput s = (key s, value s)
 
--- Given a reduce function, `reducer` returns a function
--- that can be passed to haskell's `interact` function.
-reducer :: Reduce -> Interactor
-reducer mrReduce input =
-    let groups = groupBy compareKeys $ lines input :: [[String]] in
-    unlines $ concatMap
-        (\g -> mrReduce (key $ head g) (map value g :: [String])) groups
+compareKeys :: (Eq k) => (k, v) -> (k, v) -> Bool
+compareKeys a b = (fst a) == (fst b)
+
+reduceInteractor ::
+    (Read ki, Read vi, Eq ki, Show ko, Show vo) =>
+    Reducer ki vi ko vo -> Interactor
+reduceInteractor reducer input =
+    let keyValues = ((map convertReduceInput) . lines) input in
+    let groups = groupBy compareKeys keyValues in
+    let gathered = map (\g -> ((fst . head) g, map snd g)) groups in
+    let reducedKeyValues = concatMap (\g -> reducer (fst g) (snd g)) gathered in
+    unlines $ convertOutput reducedKeyValues
+
 
 -- Main function for a map reduce program
-mrMain :: Map -> Reduce -> IO () 
-mrMain mrMap mrReduce = do
+mrMain :: (Show k, Read k, Eq k,
+           Show v, Read v,
+           Show ko, Show vo) =>
+    Mapper k v -> Reducer k v ko vo -> IO ()
+mrMain mapper reducer = do
     args <- getArgs
     case args of
-        ["-m"] -> interact (mapper mrMap)
-        ["-r"] -> interact (reducer mrReduce)
+        ["-m"] -> interact (mapInteractor mapper)
+        ["-r"] -> interact (reduceInteractor reducer)
         _ -> putStrLn usage_message
 
+{-
 -- Main function for a map-only job
 mapMain :: Map -> IO ()
 mapMain mrMap = do
