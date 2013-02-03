@@ -10,35 +10,64 @@
 -- Happy MapReducing!
 
 
-module Hadoop.MapReduce (mrMain, Map, Reduce, key, value) where
+module Hadoop.MapReduce (Mapper, Reducer) where
 
 import System (getArgs)
 import Data.List (groupBy)
 
--- Map and Reduce corrispond to the type signatures required
+-- Mapper and Reducer correspond to the type signatures required
 -- for the "map" and "reduce" functions of the MapReduce job.
--- Note that these do NOT corrispond to the type signatures
+-- Note that these do NOT correspond to the type signatures
 -- of haskell's `map` and `reduce` functions.
 
-type Map = String -> [String]
-type Reduce = String -> [String] -> [String]
+type Mapper k v = String -> [(k, v)]
+type Reducer ki vi ko vo = ki -> [vi] -> [(ko, vo)]
 
 -- Interactor is a type signature of the function required
 -- by the haskell `interact` function.
 type Interactor = String -> String
 
--- Field separator. Hadoop uses the space character (' ')
--- by default, but comma (',') and tab ('\t') are also
+-- Field separator. Hadoop uses the tab character ('\t')
+-- by default, but comma (',') and space (' ') are also
 -- common. Ideally there should be a way to change the
 -- separator without modifying the source.
-separator = ' '
+separator = '\t'
 
 usage_message =
     "Notice: This is a streaming MapReduce program.\n" ++
     "It must be called with one of the following arguments:\n" ++
-    "    -m     Run the Map portion of the MapReduce job\n" ++
-    "    -r     Run the Reduce portion of the MapReduce job\n"
+    "    -m     Run the Mapper portion of the MapReduce job\n" ++
+    "    -r     Run the Reducer portion of the MapReduce job\n"
 
+-- Convert key value pairs from the output of a Mapper to String values that are
+-- expected output by the Hadoop streaming system.
+convertMapOutput :: (Show k, Show v) => [(k, v)] -> [String]
+convertMapOutput = map toKeyValue
+    where toKeyValue kv = (show $ fst kv) ++ [separator] ++ (show $ snd kv)
+
+-- Given a map function, `mapper` returns a function that
+-- can be passed to haskell's `interact` function.
+mapInteractor :: (Show k, Show v) => Mapper k v -> Interactor
+mapInteractor mapper =
+    unlines . (concatMap (convertMapOutput . mapper)) . lines
+
+
+-- Convert a line of input from a Hadoop streaming process to the key and value
+-- that are expected as input to a Reducer
+convertReduceInput :: String -> (String, String)
+convertReduceInput s =
+    (takeWhile (/= separator) s, tail $ dropWhile (/= separator) s)
+
+{-
+reduceInteractor ::
+    (Read ki, Read vi, Show ko, Show vo) => Reducer ki vi ko vo -> Interactor
+reduceInteractor reducer input =
+ -}
+
+
+
+
+{-
 -- For the reduce step, each line consists of a key and
 -- (optionally) a value. The function `key` extracts
 -- the key from a line.
@@ -53,12 +82,6 @@ value = (drop 1) . dropWhile (/= separator)
 -- have the same key.
 compareKeys :: String -> String -> Bool
 compareKeys a b = (key a) == (key b)
-
--- Given a map function, `mapper` returns a function that
--- can be passed to haskell's `interact` function.
-mapper :: Map -> Interactor
-mapper mrMap = 
-    unlines . (concatMap mrMap) . lines
 
 -- Given a reduce function, `reducer` returns a function
 -- that can be passed to haskell's `interact` function.
@@ -94,4 +117,4 @@ reduceMain mrReduce = do
         ["-m"] -> interact id
         ["-r"] -> interact (reducer mrReduce)
         _ -> putStrLn usage_message
-
+-}
