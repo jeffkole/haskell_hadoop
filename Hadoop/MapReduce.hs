@@ -10,7 +10,7 @@
 -- Happy MapReducing!
 
 
-module Hadoop.MapReduce (mrMain, Mapper, Reducer) where
+module Hadoop.MapReduce (mrMain, mapMain, reduceMain, Mapper, Reducer) where
 
 import System (getArgs)
 import Data.List (groupBy)
@@ -80,6 +80,13 @@ reduceInteractor reducer input =
     let reducedKeyValues = concatMap (\g -> reducer (fst g) (snd g)) gathered in
     unlines $ convertOutput reducedKeyValues
 
+{-
+identityMapper :: Mapper k v
+identityMapper input = [(input, input)]
+
+identityReducer :: Reducer ki vi ko vo
+identityReducer key values = map (\v -> (key, v)) values
+-}
 
 -- Main function for a map reduce program
 mrMain :: (Show k, Read k, Eq k,
@@ -93,22 +100,25 @@ mrMain mapper reducer = do
         ["-r"] -> interact (reduceInteractor reducer)
         _ -> putStrLn usage_message
 
-{-
 -- Main function for a map-only job
-mapMain :: Map -> IO ()
-mapMain mrMap = do
+mapMain :: (Show k, Read k, Eq k,
+            Show v, Read v) =>
+    Mapper k v -> IO ()
+mapMain mapper = do
     args <- getArgs
     case args of
-        ["-m"] -> interact (mapper mrMap)
+        ["-m"] -> interact (mapInteractor mapper)
         ["-r"] -> interact id
         _ -> putStrLn usage_message
 
 -- Main function for a reduce-only job
-reduceMain :: Reduce -> IO ()
-reduceMain mrReduce = do
+reduceMain :: (Show ki, Read ki, Eq ki,
+               Show vi, Read vi,
+               Show ko, Show vo) =>
+    Reducer ki vi ko vo -> IO ()
+reduceMain reducer = do
     args <- getArgs
     case args of
         ["-m"] -> interact id
-        ["-r"] -> interact (reducer mrReduce)
+        ["-r"] -> interact (reduceInteractor reducer)
         _ -> putStrLn usage_message
--}
