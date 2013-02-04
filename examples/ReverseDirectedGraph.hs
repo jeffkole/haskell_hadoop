@@ -8,9 +8,9 @@
 
 module Main where
 
-import Hadoop.MapReduce (mrMain, Map, Reduce, key, value)
+import Hadoop.MapReduce (mrMain, Mapper, Reducer)
 
-wfMap :: Map
+wfMap :: Mapper String String
 wfMap line =
     let node = key line in
     do

@@ -4,13 +4,12 @@
 
 module Main where
 
-import Hadoop.MapReduce (mrMain, Map, Reduce)
+import Hadoop.MapReduce (mrMain, Mapper, Reducer)
 
-wfMap :: Map
-wfMap record = [word ++ " 1" | word <- words record]
+wfMap :: Mapper String Int
+wfMap record = [(word, 1) | word <- words record]
 
-wfReduce :: Reduce
-wfReduce key values = [key ++ " " ++  (show $ sum $ (map read) values)]
+wfReduce :: Reducer String Int String Int
+wfReduce key values = [(key, sum values)]
 
 main = mrMain wfMap wfReduce
-
