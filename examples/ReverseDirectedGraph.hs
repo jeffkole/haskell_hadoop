@@ -8,7 +8,7 @@
 
 module Main where
 
-import Hadoop.MapReduce (mapMain, Mapper, Reducer)
+import Hadoop.MapReduce (mrMain, Mapper, Reducer)
 
 -- input line is [origin, destA, destB, destC,...]
 -- emit [(destA, origin), (destB, origin), (destC, origin),...]
@@ -20,11 +20,11 @@ wfMap line =
         adjacentNode <- tail nodes
         return $ (adjacentNode, origin)
 
-{-
-wfReduce :: Reducer String String String String
+-- input origin -> [destA, destB, destC]
+-- emit [(origin, [destA, destB, destC])]
+wfReduce :: Reducer String String String [String]
 wfReduce key values =
-    return $ key ++ " " ++ (unwords values)
-    -}
+    return $ (key, values)
 
-main = mapMain wfMap -- wfReduce
+main = mrMain wfMap wfReduce
 
